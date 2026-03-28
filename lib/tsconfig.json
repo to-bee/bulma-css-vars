@@ -6,10 +6,9 @@
     "declaration": true,
     "module": "commonjs",
     "moduleResolution": "node",
-    "target": "es2015",
+    "target": "es2020",
     "noImplicitAny": true,
-    "lib": ["es2019", "dom"],
-    "downlevelIteration": true,
+    "lib": ["es2020", "dom"],
     "skipLibCheck": true
   },
   "include": ["./src/**/*"],

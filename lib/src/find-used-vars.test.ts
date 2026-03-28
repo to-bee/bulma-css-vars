@@ -11,19 +11,17 @@ describe('find used vars', () => {
       }
     `
     const usedVars = getUsedVariables(css, ['black'])
-    expect(usedVars).toMatchInlineSnapshot(`
-      Object {
-        "black": Object {
-          "calls": Array [
-            Object {
-              "composeArg": null,
-              "fn": "dark-color",
-              "fnArg": null,
-            },
-          ],
-        },
-      }
-    `)
+    expect(usedVars).toEqual({
+      black: {
+        calls: [
+          {
+            composeArg: null,
+            fn: 'dark-color',
+            fnArg: null,
+          },
+        ],
+      },
+    })
   })
 
   test('throws when using illegal variable names', () => {
@@ -46,7 +44,7 @@ describe('find used vars', () => {
       }
     `
     const usedVars = getUsedVariables(css, [])
-    expect(usedVars).toMatchInlineSnapshot(`Object {}`)
+    expect(usedVars).toEqual({})
   })
 
   test('does not return variables unused in sass', () => {
@@ -56,6 +54,6 @@ describe('find used vars', () => {
       }
     `
     const usedVars = getUsedVariables(css, ['green'])
-    expect(usedVars).toMatchInlineSnapshot(`Object {}`)
+    expect(usedVars).toEqual({})
   })
 })

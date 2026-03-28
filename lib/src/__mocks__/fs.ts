@@ -21,10 +21,13 @@ async function readFilePromised(filePath: string) {
 async function writeFilePromised(filePath: string, content: string) {}
 
 fs.__setMockFiles = __setMockFiles;
+async function mkdirPromised(dirPath: string, options?: any) {}
+
 fs.promises = {
   access: accessPromised,
   readFile: readFilePromised,
-  writeFile: writeFilePromised
+  writeFile: writeFilePromised,
+  mkdir: mkdirPromised,
 }
 
 module.exports = fs;

@@ -61,9 +61,9 @@ export function findCssVarRules(
 }
 
 const transtitionProperties = ['color', 'background-color', 'border-color']
-function transitions(transitionDurationTimingFunctionDelay: string) {
+function transitions(transitionDurationTimingFunctionDelay: string): Declaration {
   return {
-    type: 'declaration',
+    type: 'declaration' as const,
     property: 'transition',
     value: transtitionProperties
       .map((prop) => `${prop} ${transitionDurationTimingFunctionDelay}`)
@@ -75,13 +75,13 @@ export function traverseRule(
   el: Rule | Comment | AtRule,
   usedVars: NameValueColor[],
   transitionDurationTimingFunctionDelay?: string
-): Rule {
+): Rule | null {
   switch (el.type) {
     case 'rule':
       const r: Rule = el
-      const decs = r.declarations
+      const decs = (r.declarations as Declaration[])
         .map((dec) => findCssVarDeclaration(dec, usedVars))
-        .filter((d) => !!d)
+        .filter((d) => !!d) as Declaration[]
       if (decs.length) {
         if (
           transitionDurationTimingFunctionDelay &&
@@ -101,16 +101,16 @@ export function traverseRule(
       break
     default:
       if ('rules' in el) {
-        // document, host, media adn supports have the rules inside
-        const docHostMediaSupports: Document | Host | Media | Supports = el
+        // document, host, media and supports have the rules inside
+        const docHostMediaSupports = el as unknown as { rules: (Rule | Comment | AtRule)[] }
         const insideRules = docHostMediaSupports.rules
           .map((r) =>
             traverseRule(r, usedVars, transitionDurationTimingFunctionDelay)
           )
-          .filter((r) => !!r)
+          .filter((r) => !!r) as Rule[]
         if (insideRules.length) {
           docHostMediaSupports.rules = insideRules
-          return docHostMediaSupports
+          return el as unknown as Rule
         }
         return null
       }
@@ -121,8 +121,8 @@ export function traverseRule(
 export function findCssVarDeclaration(
   dec: Declaration,
   usedVars: NameValueColor[]
-) {
-  if (dec.type === 'comment') return null
+): Declaration | null {
+  if (dec.type === ('comment' as string)) return null
   const val = dec.value.trim()
   if (val.startsWith('var(--') && val.endsWith(')')) {
     const varName = val.substring(4, val.length - 1)

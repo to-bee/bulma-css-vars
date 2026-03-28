@@ -1,4 +1,5 @@
 @use 'sass:color'
+@use 'sass:meta'
 
 // -------------- original untouched bulma fns --------------
 
@@ -7,12 +8,12 @@
   $merged-colors: $bulma-colors
 
   // We want a map as input
-  @if type-of($custom-colors) == 'map'
+  @if meta.type-of($custom-colors) == 'map'
     @each $name, $components in $custom-colors
       // The color name should be a string
       // and the components either a single color
       // or a colors list with at least one element
-      @if type-of($name) == 'string' and (type-of($components) == 'list' or type-of($components) == 'color') and length($components) >= 1
+      @if meta.type-of($name) == 'string' and (meta.type-of($components) == 'list' or meta.type-of($components) == 'color') and length($components) >= 1
         $color-base: null
         $color-invert: null
         $color-light: null
@@ -21,12 +22,12 @@
 
         // The param can either be a single color
         // or a list of 2 colors
-        @if type-of($components) == 'color'
+        @if meta.type-of($components) == 'color'
           $color-base: $components
           $color-invert: findColorInvert($color-base)
           $color-light: findLightColor($color-base)
           $color-dark: findDarkColor($color-base)
-        @else if type-of($components) == 'list'
+        @else if meta.type-of($components) == 'list'
           $color-base: nth($components, 1)
           // If Invert, Light and Dark are provided
           @if length($components) > 3
@@ -47,7 +48,7 @@
         $value: ($color-base, $color-invert, $color-light, $color-dark)
 
         // We only want to merge the map if the color base is an actual color
-        @if type-of($color-base) == 'color'
+        @if meta.type-of($color-base) == 'color'
           // We merge this colors elements as map with Bulma's colors map
           // (we can override them this way, no multiple definition for the same name)
           // $merged-colors: map_merge($merged-colors, ($name: ($color-base, $color-invert, $color-light, $color-dark)))
@@ -66,9 +67,9 @@
   @return $value
 
 @function colorLuminance($color)
-  @if type-of($color) != 'color'
+  @if meta.type-of($color) != 'color'
     @return 0.55
-  $color-rgb: ('red': red($color),'green': green($color),'blue': blue($color))
+  $color-rgb: ('red': color.channel($color, "red", $space: rgb),'green': color.channel($color, "green", $space: rgb),'blue': color.channel($color, "blue", $space: rgb))
   @each $name, $value in $color-rgb
     $adjusted: 0
     $value: divide($value, 255)
@@ -83,63 +84,63 @@
 // -------------- helper fns for css vars --------------
 
 @function unwrap($color)
-  @if type-of($color) == string and str-index($color, "var(") == 1
+  @if meta.type-of($color) == string and str-index($color, "var(") == 1
     @return str-slice($color, 5, -2)
   @else
     @return $color
 
 @function wrap($color)
-  @if type-of($color) == string and str-index($color, "--") == 1
+  @if meta.type-of($color) == string and str-index($color, "--") == 1
     @return var(#{$color})
-  @else 
+  @else
     @return $color
 
 // -------------- modified bulma fns for css vars --------------
 
 @function darken($col, $perc)
-  @if type-of($col) == 'color'
+  @if meta.type-of($col) == 'color'
     @return color.adjust($col, $lightness: $perc * -1)
-  @else 
+  @else
     $color: unwrap($col)
     $perccalc: #{$perc * 100}
     $num: str-slice(quote($perccalc), 0, -2) // remove '%'
     @return wrap(#{$color}--#{$num}--darken)
 
 @function lighten($col, $perc)
-  @if type-of($col) == 'color'
+  @if meta.type-of($col) == 'color'
     @return color.adjust($col, $lightness: $perc)
-  @else 
+  @else
     $color: unwrap($col)
     $perccalc: #{$perc * 100}
     $num: str-slice(quote($perccalc), 0, -2) // remove '%''
     @return wrap(#{$color}--#{$num}--lighten)
 
 @function saturate($col, $perc)
-  @if type-of($col) == 'color'
+  @if meta.type-of($col) == 'color'
     @return color.adjust($col, $saturation: $perc)
-  @else 
+  @else
     $color: unwrap($col)
     $perccalc: #{$perc * 100}
     $num: str-slice(quote($perccalc), 0, -2) // remove '%''
     @return wrap(#{$color}--#{$num}--saturate)
 
 @function desaturate($col, $perc)
-  @if type-of($col) == 'color'
+  @if meta.type-of($col) == 'color'
     @return color.adjust($col, $saturation: $perc * -1)
-  @else 
+  @else
     $color: unwrap($col)
     $perccalc: #{$perc * 100}
     $num: str-slice(quote($perccalc), 0, -2) // remove '%''
     @return wrap(#{$color}--#{$num}--desaturate)
 
 @function rgba($r, $g, $b: null, $alpha: null)
-  @if type-of($r) == number and type-of($g) == number and type-of($b) == number and type-of($alpha) == number
+  @if meta.type-of($r) == number and meta.type-of($g) == number and meta.type-of($b) == number and meta.type-of($alpha) == number
     @return rgb($r, $g, $b, $alpha)
   $col: $r
   $alpha: $g
-  @if type-of($col) == 'color'
+  @if meta.type-of($col) == 'color'
     @return color.change($col, $alpha: $alpha)
-  @else if type-of($col) == 'color'
+  @else if meta.type-of($col) == 'color'
     @return color.change($col, $alpha: $alpha)
   @else
     $color: unwrap($col)
@@ -149,40 +150,40 @@
       @return color.change($color, $alpha: $g)
 
 @function adjust-hue($col, $deg)
-  @if type-of($col) == 'color'
+  @if meta.type-of($col) == 'color'
     @return color.adjust($col, $hue: $deg)
   @else
     $color: unwrap($col)
     @return wrap(#{$color}--#{$deg}--adjusthue)
 
 @function findLightColor($col)
-  @if type-of($col) == 'color'
+  @if meta.type-of($col) == 'color'
     @return bulmaFindLightColor($col)
   @else
     $color: unwrap($col)
     @return wrap(#{$color}--light-color)
 
 @function findDarkColor($col)
-  @if type-of($col) == 'color'
+  @if meta.type-of($col) == 'color'
     @return bulmaFindDarkColor($col)
   @else
     $color: unwrap($col)
     @return wrap(#{$color}--dark-color)
 
 @function findColorInvert($col)
-  @if type-of($col) == 'color'
+  @if meta.type-of($col) == 'color'
     @return bulmaFindColorInvert($col)
   @else
     $color: unwrap($col)
     @return wrap(#{$color}--color-invert)
 
 @function lightness($col)
-  @if type-of($col) == 'color'
-    @return color.lightness($col)
+  @if meta.type-of($col) == 'color'
+    @return color.channel($col, "lightness", $space: hsl)
   // this is called by message.sass with a possible variable (white)
   // as the variable $white is usually bright, we return a high default value
   @return 90%
-  
+
 
 // TODO: fix colorLuminance and lightness calls
 // outside functions (both in message.sass)!
@@ -190,9 +191,9 @@
 // ===================== ORIGINAL BULMA FUNCTIONS ========================
 
 @function bulmaColorLuminance($color)
-  @if type-of($color) != 'color'
+  @if meta.type-of($color) != 'color'
     @return 0.55
-  $color-rgb: ('red': red($color),'green': green($color),'blue': blue($color))
+  $color-rgb: ('red': color.channel($color, "red", $space: rgb),'green': color.channel($color, "green", $space: rgb),'blue': color.channel($color, "blue", $space: rgb))
   @each $name, $value in $color-rgb
     $adjusted: 0
     $value: divide($value, 255)
@@ -211,35 +212,35 @@
     @return #fff
 
 @function bulmaFindLightColor($color)
-  @if type-of($color) == 'color'
+  @if meta.type-of($color) == 'color'
     $l: 96%
     @if lightness($color) > 96%
       $l: lightness($color)
-    @return change-color($color, $lightness: $l)
+    @return color.change($color, $lightness: $l)
   @warn "$background for `#{$color}` not found"
   @return $background
 
 @function bulmaFindDarkColor($color)
-  @if type-of($color) == 'color'
+  @if meta.type-of($color) == 'color'
     $base-l: 29%
     $luminance: bulmaColorLuminance($color)
     $luminance-delta: (0.53 - $luminance)
     $target-l: round($base-l + ($luminance-delta * 53))
-    @return change-color($color, $lightness: max($base-l, $target-l))
+    @return color.change($color, $lightness: max($base-l, $target-l))
   @return $text-strong
 
 @function bulmaRgba($color, $alpha)
-  @if type-of($color) != 'color'
+  @if meta.type-of($color) != 'color'
     @return $color
   @return rgba($color, $alpha)
 
 @function bulmaDarken($color, $amount)
-  @if type-of($color) != 'color'
+  @if meta.type-of($color) != 'color'
     @return $color
   @return darken($color, $amount)
 
 @function bulmaLighten($color, $amount)
-  @if type-of($color) != 'color'
+  @if meta.type-of($color) != 'color'
     @return $color
   @return lighten($color, $amount)
 

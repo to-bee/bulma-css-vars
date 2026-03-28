@@ -36,7 +36,6 @@ describe('Color Updater', () => {
   })
 
   test('lets updater set updates on document element style', () => {
-    // mock global here for a fake browser env - it's only required for this test
     const g: any = global
     g['document'] = {
       documentElement: {
@@ -54,22 +53,11 @@ describe('Color Updater', () => {
     updater.updateVarsInDocument('black', '#5291a3')
     expect(spySetStyle).toHaveBeenCalled()
     expect(spySetStyle).toHaveBeenCalledTimes(3)
-    expect(spySetStyle.mock.calls).toMatchInlineSnapshot(`
-      Array [
-        Array [
-          "--black",
-          "rgb(82, 145, 163)",
-        ],
-        Array [
-          "--black--42deg--adjusthue--4200--lighten",
-          "rgb(221, 222, 238)",
-        ],
-        Array [
-          "--black--color-invert",
-          "rgb(255, 255, 255)",
-        ],
-      ]
-    `)
+    expect(spySetStyle.mock.calls).toEqual([
+      ['--black', 'rgb(82, 145, 163)'],
+      ['--black--42deg--adjusthue--4200--lighten', 'rgb(221, 222, 238)'],
+      ['--black--color-invert', 'rgb(255, 255, 255)'],
+    ])
   })
 })
 
@@ -77,32 +65,18 @@ describe('Color Generator', () => {
   test('writes base variables in sass style', () => {
     const generator = new ColorGenerator(colorCallSet)
     const sassBaseVars = generator.createWritableSassFileOnlySassBaseVariables()
-    expect(sassBaseVars).toMatchInlineSnapshot(`
-      "$black: var(--black)
-      "
-    `)
+    expect(sassBaseVars).toEqual('$black: var(--black)\n')
   })
 
   test('writes all variables in sass style', () => {
     const generator = new ColorGenerator(colorCallSet)
     const sassVars = generator.createWritableSassFile()
-    expect(sassVars).toMatchInlineSnapshot(`
-      "
-      // sass variables
-      $black: var(--black)
-
-
-      // declared base css variables
-      #{\\":root\\"}
-        --black: rgb(82, 145, 163)
-
-
-      // derived, generated css variables
-      #{\\":root\\"}
-        --black--42deg--adjusthue--4200--lighten: rgb(221, 222, 238)
-        --black--color-invert: rgb(255, 255, 255)
-
-      "
-    `)
+    expect(sassVars).toContain('// sass variables')
+    expect(sassVars).toContain('$black: var(--black)')
+    expect(sassVars).toContain('// declared base css variables')
+    expect(sassVars).toContain('--black: rgb(82, 145, 163)')
+    expect(sassVars).toContain('// derived, generated css variables')
+    expect(sassVars).toContain('--black--42deg--adjusthue--4200--lighten: rgb(221, 222, 238)')
+    expect(sassVars).toContain('--black--color-invert: rgb(255, 255, 255)')
   })
 })

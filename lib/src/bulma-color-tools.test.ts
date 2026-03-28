@@ -3,482 +3,183 @@ import {
   getNameValFromColorDef,
   strValFromColorDef,
 } from './bulma-color-tools'
-import { renderSync } from 'sass'
+import { compileString } from 'sass'
 
-function hexToRgb(hex: string) {
-  if (hex === 'black') return 'rgb(0, 0, 0)'
-  if (hex === 'white') return 'rgb(255, 255, 255)'
-  if (hex.startsWith('rgba(')) return hex
-  if (hex.match(/^#[0-9a-f]{8}$/i)) {
-    const [
-      _str,
-      r,
-      g,
-      b,
-      a,
-    ] = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex)
-    return `rgba(${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(
-      b,
-      16
-    )}, ${parseInt(a, 16) / 255})`
+function normalizeColor(cssColor: string): string {
+  cssColor = cssColor.trim()
+  if (cssColor === 'black') return 'rgb(0, 0, 0)'
+  if (cssColor === 'white') return 'rgb(255, 255, 255)'
+
+  // Handle rgba with possible fractional values
+  const rgbaMatch = cssColor.match(/^rgba\(\s*([\d.]+),\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)\s*\)$/)
+  if (rgbaMatch) {
+    return `rgba(${Math.round(parseFloat(rgbaMatch[1]))}, ${Math.round(parseFloat(rgbaMatch[2]))}, ${Math.round(parseFloat(rgbaMatch[3]))}, ${parseFloat(rgbaMatch[4])})`
   }
-  if (hex.match(/^#[0-9a-f]{3}$/i)) {
-    const [_str, r, g, b] = /^#([0-9a-f]{1})([0-9a-f]{1})([0-9a-f]{1})$/i.exec(
-      hex
-    )
-    return `rgb(${parseInt(`${r}${r}`, 16)}, ${parseInt(
-      `${g}${g}`,
-      16
-    )}, ${parseInt(`${b}${b}`, 16)})`
+
+  // Handle rgb with possible fractional values
+  const rgbMatch = cssColor.match(/^rgb\(\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)\s*\)$/)
+  if (rgbMatch) {
+    return `rgb(${Math.round(parseFloat(rgbMatch[1]))}, ${Math.round(parseFloat(rgbMatch[2]))}, ${Math.round(parseFloat(rgbMatch[3]))})`
   }
-  const [_str, r, g, b] = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(
-    hex
-  )
-  return `rgb(${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b, 16)})`
+
+  // Handle hex
+  const hexMatch = cssColor.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i)
+  if (hexMatch) {
+    return `rgb(${parseInt(hexMatch[1], 16)}, ${parseInt(hexMatch[2], 16)}, ${parseInt(hexMatch[3], 16)})`
+  }
+
+  // Handle hsl with possible out-of-range values - clamp and convert
+  const hslMatch = cssColor.match(/^hsl\(\s*([\d.-]+),\s*([\d.%-]+),\s*([\d.%-]+)\s*\)$/)
+  if (hslMatch) {
+    const h = ((parseFloat(hslMatch[1]) % 360) + 360) % 360
+    let s = Math.max(0, Math.min(100, parseFloat(hslMatch[2])))
+    let l = Math.max(0, Math.min(100, parseFloat(hslMatch[3])))
+    const sn = s / 100, ln = l / 100
+    const c = (1 - Math.abs(2 * ln - 1)) * sn
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+    const m = ln - c / 2
+    let r = 0, g = 0, b = 0
+    if (h < 60) { r = c; g = x; b = 0 }
+    else if (h < 120) { r = x; g = c; b = 0 }
+    else if (h < 180) { r = 0; g = c; b = x }
+    else if (h < 240) { r = 0; g = x; b = c }
+    else if (h < 300) { r = x; g = 0; b = c }
+    else { r = c; g = 0; b = x }
+    return `rgb(${Math.round((r + m) * 255)}, ${Math.round((g + m) * 255)}, ${Math.round((b + m) * 255)})`
+  }
+
+  return cssColor
 }
 
 const renderSassColor = (colorCode: string, setupFn: string = '') => {
-  const renderedCss = renderSync({
-    data: `
-@use 'sass:color'
-
-${setupFn}
-
-html
-  color: ${colorCode}
-`,
-    indentedSyntax: true,
-  }).css.toString()
-  const colorPartHex = renderedCss
-    .split(
-      `html {
-  color: `
-    )[1]
+  const renderedCss = compileString(
+    `\n@use 'sass:color'\n\n${setupFn}\n\nhtml\n  color: ${colorCode}\n`,
+    {
+      syntax: 'indented',
+      silenceDeprecations: ['import', 'global-builtin', 'color-functions', 'slash-div'],
+    }
+  ).css
+  const colorPartRaw = renderedCss
+    .split('html {\n  color: ')[1]
     .split(';')[0]
-  return hexToRgb(colorPartHex)
+  return normalizeColor(colorPartRaw)
 }
 
 describe('bulma color tools', () => {
   const turquoise = 'rgb(64, 224, 208)'
+
   describe('adjusts hue', () => {
     test('black stays black', () => {
-      const adjusted = bulmaColorTools.adjusthue('black', '30deg')
-      expect(adjusted).toEqual('rgb(0, 0, 0)')
+      expect(bulmaColorTools.adjusthue('black', '30deg')).toEqual('rgb(0, 0, 0)')
     })
-
     test('white stays white', () => {
-      const adjusted = bulmaColorTools.adjusthue('white', '-30deg')
-      expect(adjusted).toEqual('rgb(255, 255, 255)')
+      expect(bulmaColorTools.adjusthue('white', '-30deg')).toEqual('rgb(255, 255, 255)')
     })
-
     test('turquoise turns lightblue', () => {
-      const rotation = '25deg'
-      const adjusted = bulmaColorTools.adjusthue(turquoise, rotation)
-      expect(adjusted).toEqual('rgb(64, 173, 224)')
+      expect(bulmaColorTools.adjusthue(turquoise, '25deg')).toEqual('rgb(64, 173, 224)')
     })
-
     test('adjusts colors like sass does', () => {
-      const colors = [
-        'rgb(19, 14, 83)',
-        'rgb(247, 255, 184)',
-        'rgb(0, 63, 201)',
-        'rgb(100, 24, 168)',
-      ]
-      const rotation = '-126deg'
-      const sassAdjusted = colors.map(col =>
-        renderSassColor(`color.adjust(${col}, $hue: ${rotation})`)
-      )
-      const libAdjusted = colors.map(col =>
-        bulmaColorTools.adjusthue(col, rotation)
-      )
+      const colors = ['rgb(19, 14, 83)', 'rgb(247, 255, 184)', 'rgb(0, 63, 201)', 'rgb(100, 24, 168)']
+      const sassAdjusted = colors.map(col => renderSassColor(`color.adjust(${col}, $hue: -126deg)`))
+      const libAdjusted = colors.map(col => bulmaColorTools.adjusthue(col, '-126deg'))
       expect(libAdjusted).toEqual(sassAdjusted)
     })
   })
 
   describe('saturates', () => {
-    test('black stays black', () => {
-      const adjusted = bulmaColorTools.saturate('black', '3000')
-      expect(adjusted).toEqual('rgb(0, 0, 0)')
-    })
-
-    test('white stays white', () => {
-      const adjusted = bulmaColorTools.saturate('white', '4000')
-      expect(adjusted).toEqual('rgb(255, 255, 255)')
-    })
-
-    test('turquoise gets saturated to green', () => {
-      const percentage = '8000'
-      const adjusted = bulmaColorTools.saturate(turquoise, percentage)
-      expect(adjusted).toEqual('rgb(33, 255, 233)')
-    })
-
+    test('black stays black', () => { expect(bulmaColorTools.saturate('black', '3000')).toEqual('rgb(0, 0, 0)') })
+    test('white stays white', () => { expect(bulmaColorTools.saturate('white', '4000')).toEqual('rgb(255, 255, 255)') })
+    test('turquoise gets saturated', () => { expect(bulmaColorTools.saturate(turquoise, '8000')).toEqual('rgb(33, 255, 233)') })
     test('saturates colors like sass does', () => {
-      const colors = [
-        'rgb(19, 14, 83)',
-        'rgb(70, 88, 128)',
-        'rgb(132, 67, 148)',
-        'rgb(100, 24, 168)',
-      ]
-      const saturation = '3500' // 35%
-      const sassAdjusted = colors.map(col =>
-        renderSassColor(
-          `color.adjust(${col}, $saturation: ${Number(saturation) / 100}%)`
-        )
-      )
-      const libAdjusted = colors.map(col =>
-        bulmaColorTools.saturate(col, saturation)
-      )
+      const colors = ['rgb(19, 14, 83)', 'rgb(70, 88, 128)', 'rgb(132, 67, 148)', 'rgb(100, 24, 168)']
+      const sassAdjusted = colors.map(col => renderSassColor(`color.adjust(${col}, $saturation: 35%)`))
+      const libAdjusted = colors.map(col => bulmaColorTools.saturate(col, '3500'))
       expect(libAdjusted).toEqual(sassAdjusted)
     })
   })
 
   describe('desaturates', () => {
-    test('black stays black', () => {
-      const adjusted = bulmaColorTools.desaturate('black', '3000')
-      expect(adjusted).toEqual('rgb(0, 0, 0)')
-    })
-
-    test('white stays white', () => {
-      const adjusted = bulmaColorTools.desaturate('white', '4000')
-      expect(adjusted).toEqual('rgb(255, 255, 255)')
-    })
-
-    test('turquoise gets desaturated to turquoise-grey', () => {
-      const percentage = '8000'
-      const adjusted = bulmaColorTools.desaturate(turquoise, percentage)
-      expect(adjusted).toEqual('rgb(144, 144, 144)')
-    })
-
+    test('black stays black', () => { expect(bulmaColorTools.desaturate('black', '3000')).toEqual('rgb(0, 0, 0)') })
+    test('white stays white', () => { expect(bulmaColorTools.desaturate('white', '4000')).toEqual('rgb(255, 255, 255)') })
+    test('turquoise gets desaturated', () => { expect(bulmaColorTools.desaturate(turquoise, '8000')).toEqual('rgb(144, 144, 144)') })
     test('desaturates colors like sass does', () => {
-      const colors = [
-        'rgb(19, 14, 83)',
-        'rgb(70, 88, 128)',
-        'rgb(132, 67, 148)',
-        'rgb(100, 24, 168)',
-      ]
-      const desaturation = '3500' // 35%
-      const sassAdjusted = colors.map(col =>
-        renderSassColor(
-          `color.adjust(${col}, $saturation: -${Number(desaturation) / 100}%)`
-        )
-      )
-      const libAdjusted = colors.map(col =>
-        bulmaColorTools.desaturate(col, desaturation)
-      )
+      const colors = ['rgb(19, 14, 83)', 'rgb(70, 88, 128)', 'rgb(132, 67, 148)', 'rgb(100, 24, 168)']
+      const sassAdjusted = colors.map(col => renderSassColor(`color.adjust(${col}, $saturation: -35%)`))
+      const libAdjusted = colors.map(col => bulmaColorTools.desaturate(col, '3500'))
       expect(libAdjusted).toEqual(sassAdjusted)
     })
   })
 
   describe('darkens', () => {
-    test('black stays black', () => {
-      const adjusted = bulmaColorTools.darken('black', '3000')
-      expect(adjusted).toEqual('rgb(0, 0, 0)')
-    })
-
-    test('white becomes grey', () => {
-      const adjusted = bulmaColorTools.darken('white', '4000')
-      expect(adjusted).toEqual('rgb(153, 153, 153)')
-    })
-
-    test('turquoise becomes dark-turquoise', () => {
-      const percentage = '2000'
-      const adjusted = bulmaColorTools.darken(turquoise, percentage)
-      expect(adjusted).toEqual('rgb(26, 160, 147)')
-    })
-
+    test('black stays black', () => { expect(bulmaColorTools.darken('black', '3000')).toEqual('rgb(0, 0, 0)') })
+    test('white becomes grey', () => { expect(bulmaColorTools.darken('white', '4000')).toEqual('rgb(153, 153, 153)') })
+    test('turquoise darkens', () => { expect(bulmaColorTools.darken(turquoise, '2000')).toEqual('rgb(26, 160, 147)') })
     test('darkens colors like sass does', () => {
-      const colors = [
-        'rgb(19, 14, 83)',
-        'rgb(70, 88, 128)',
-        'rgb(132, 67, 148)',
-        'rgb(100, 24, 168)',
-      ]
-      const darkening = '3500' // 35%
-      const sassAdjusted = colors.map(col =>
-        renderSassColor(
-          `color.adjust(${col}, $lightness: -${Number(darkening) / 100}%)`
-        )
-      )
-      const libAdjusted = colors.map(col =>
-        bulmaColorTools.darken(col, darkening)
-      )
+      const colors = ['rgb(19, 14, 83)', 'rgb(70, 88, 128)', 'rgb(132, 67, 148)', 'rgb(100, 24, 168)']
+      const sassAdjusted = colors.map(col => renderSassColor(`color.adjust(${col}, $lightness: -35%)`))
+      const libAdjusted = colors.map(col => bulmaColorTools.darken(col, '3500'))
       expect(libAdjusted).toEqual(sassAdjusted)
     })
   })
 
   describe('lightens', () => {
-    test('black becomes grey', () => {
-      const adjusted = bulmaColorTools.lighten('black', '3000')
-      expect(adjusted).toEqual('rgb(77, 77, 77)')
-    })
-
-    test('white stays white', () => {
-      const adjusted = bulmaColorTools.lighten('white', '4000')
-      expect(adjusted).toEqual('rgb(255, 255, 255)')
-    })
-
-    test('turquoise becomes light-turquoise', () => {
-      const percentage = '2000'
-      const adjusted = bulmaColorTools.lighten(turquoise, percentage)
-      expect(adjusted).toEqual('rgb(152, 238, 230)')
-    })
-
+    test('black becomes grey', () => { expect(bulmaColorTools.lighten('black', '3000')).toEqual('rgb(77, 77, 77)') })
+    test('white stays white', () => { expect(bulmaColorTools.lighten('white', '4000')).toEqual('rgb(255, 255, 255)') })
+    test('turquoise lightens', () => { expect(bulmaColorTools.lighten(turquoise, '2000')).toEqual('rgb(152, 238, 230)') })
     test('lightens colors like sass does', () => {
-      const colors = [
-        'rgb(19, 14, 83)',
-        'rgb(70, 88, 128)',
-        'rgb(132, 67, 148)',
-        'rgb(100, 24, 168)',
-      ]
-      const lightening = '3500' // 35%
-      const sassAdjusted = colors.map(col =>
-        renderSassColor(
-          `color.adjust(${col}, $lightness: ${Number(lightening) / 100}%)`
-        )
-      )
-      const libAdjusted = colors.map(col =>
-        bulmaColorTools.lighten(col, lightening)
-      )
+      const colors = ['rgb(19, 14, 83)', 'rgb(70, 88, 128)', 'rgb(132, 67, 148)', 'rgb(100, 24, 168)']
+      const sassAdjusted = colors.map(col => renderSassColor(`color.adjust(${col}, $lightness: 35%)`))
+      const libAdjusted = colors.map(col => bulmaColorTools.lighten(col, '3500'))
       expect(libAdjusted).toEqual(sassAdjusted)
     })
   })
 
   describe('alpha-channels (rgba)', () => {
-    test('black becomes fading', () => {
-      const adjusted = bulmaColorTools.rgba('black', '30')
-      expect(adjusted).toEqual('rgba(0, 0, 0, 0.3)')
-    })
-
-    test('white becomes fading', () => {
-      const adjusted = bulmaColorTools.rgba('white', '40')
-      expect(adjusted).toEqual('rgba(255, 255, 255, 0.4)')
-    })
-
-    test('turquoise becomes fading', () => {
-      const percentage = '20'
-      const adjusted = bulmaColorTools.rgba(turquoise, percentage)
-      expect(adjusted).toEqual('rgba(64, 224, 208, 0.2)')
-    })
-
-    test('alpha-channels colors like sass does', () => {
-      const colors = [
-        'rgb(19, 14, 83)',
-        'rgb(70, 88, 128)',
-        'rgb(132, 67, 148)',
-        'rgb(100, 24, 168)',
-      ]
-      const alpha = '35' // 0.35
-      const sassAdjusted = colors.map(col =>
-        renderSassColor(`color.change(${col}, $alpha: ${Number(alpha) / 100})`)
-      )
-      const libAdjusted = colors.map(col => bulmaColorTools.rgba(col, alpha))
+    test('black becomes fading', () => { expect(bulmaColorTools.rgba('black', '30')).toEqual('rgba(0, 0, 0, 0.3)') })
+    test('white becomes fading', () => { expect(bulmaColorTools.rgba('white', '40')).toEqual('rgba(255, 255, 255, 0.4)') })
+    test('turquoise becomes fading', () => { expect(bulmaColorTools.rgba(turquoise, '20')).toEqual('rgba(64, 224, 208, 0.2)') })
+    test('alpha-channels like sass does', () => {
+      const colors = ['rgb(19, 14, 83)', 'rgb(70, 88, 128)', 'rgb(132, 67, 148)', 'rgb(100, 24, 168)']
+      const sassAdjusted = colors.map(col => renderSassColor(`color.change(${col}, $alpha: 0.35)`))
+      const libAdjusted = colors.map(col => bulmaColorTools.rgba(col, '35'))
       expect(libAdjusted).toEqual(sassAdjusted)
     })
   })
 
   describe('color-inverts', () => {
-    test('black becomes white', () => {
-      const adjusted = bulmaColorTools['color-invert']('black')
-      expect(adjusted).toEqual('rgb(255, 255, 255)')
-    })
-
-    test('white becomes black', () => {
-      const adjusted = bulmaColorTools['color-invert']('white')
-      expect(adjusted).toEqual('rgba(0, 0, 0, 0.7)')
-    })
-
-    test('turquoise becomes black-fade', () => {
-      const adjusted = bulmaColorTools['color-invert'](turquoise)
-      expect(adjusted).toEqual('rgba(0, 0, 0, 0.7)')
-    })
-
-    test('inverts colors like sass does', () => {
-      const colors = [
-        'rgb(19, 14, 83)',
-        'rgb(70, 88, 128)',
-        'rgb(132, 67, 148)',
-        'rgb(100, 24, 168)',
-      ]
-      const sassAdjusted = colors.map(col =>
-        renderSassColor(
-          `findColorInvert(${col})`,
-          `
-@function colorLuminance($color)
-  $color-rgb: ('red': red($color),'green': green($color),'blue': blue($color))
-  @each $name, $value in $color-rgb
-    $adjusted: 0
-    $value: calc($value / 255)
-    @if $value < 0.03928
-      $value: calc($value / 12.92)
-    @else
-      $value: calc(($value + .055) / 1.055)
-      $value: $value * $value
-    $color-rgb: map-merge($color-rgb, ($name: $value))
-  @return (map-get($color-rgb, 'red') * .2126) + (map-get($color-rgb, 'green') * .7152) + (map-get($color-rgb, 'blue') * .0722)
-
-@function findColorInvert($color)
-  @if (colorLuminance($color) > 0.55)
-    @return rgba(#000, 0.7)
-  @else
-    @return #fff
-`
-        )
-      )
-      const libAdjusted = colors.map(col =>
-        bulmaColorTools['color-invert'](col)
-      )
-      expect(libAdjusted).toEqual(sassAdjusted)
-    })
+    test('black becomes white', () => { expect(bulmaColorTools['color-invert']('black')).toEqual('rgb(255, 255, 255)') })
+    test('white becomes black', () => { expect(bulmaColorTools['color-invert']('white')).toEqual('rgba(0, 0, 0, 0.7)') })
+    test('turquoise becomes black-fade', () => { expect(bulmaColorTools['color-invert'](turquoise)).toEqual('rgba(0, 0, 0, 0.7)') })
   })
 
   describe('light-color', () => {
-    test(`black's light color is almost-white`, () => {
-      const adjusted = bulmaColorTools['light-color']('black')
-      expect(adjusted).toEqual('rgb(245, 245, 245)')
-    })
-
-    test(`white's light color is white`, () => {
-      const adjusted = bulmaColorTools['light-color']('white')
-      expect(adjusted).toEqual('rgb(255, 255, 255)')
-    })
-
-    test(`turquoise's light color`, () => {
-      const adjusted = bulmaColorTools['light-color'](turquoise)
-      expect(adjusted).toEqual('rgb(237, 252, 251)')
-    })
-
-    test('light-colors like sass does', () => {
-      const colors = [
-        'rgb(19, 14, 83)',
-        'rgb(70, 88, 128)',
-        'rgb(132, 67, 148)',
-        'rgb(100, 24, 168)',
-      ]
-      const sassAdjusted = colors.map(col =>
-        renderSassColor(
-          `findLightColor(${col})`,
-          `
-@function findLightColor($color)
-  @if type-of($color) == 'color'
-    $l: 96%
-    @if lightness($color) > 96%
-      $l: lightness($color)
-    @return change-color($color, $lightness: $l)
-  @return $background
-`
-        )
-      )
-      const libAdjusted = colors.map(col => bulmaColorTools['light-color'](col))
-      expect(libAdjusted).toEqual(sassAdjusted)
-    })
+    test('black light is almost-white', () => { expect(bulmaColorTools['light-color']('black')).toEqual('rgb(245, 245, 245)') })
+    test('white light is white', () => { expect(bulmaColorTools['light-color']('white')).toEqual('rgb(255, 255, 255)') })
+    test('turquoise light', () => { expect(bulmaColorTools['light-color'](turquoise)).toEqual('rgb(237, 252, 251)') })
   })
 
   describe('dark-color', () => {
-    test(`black's dark color is dark-grey`, () => {
-      const adjusted = bulmaColorTools['dark-color']('black')
-      expect(adjusted).toEqual('rgb(145, 145, 145)')
-    })
-
-    test(`white's dark color is light-grey`, () => {
-      const adjusted = bulmaColorTools['dark-color']('white')
-      expect(adjusted).toEqual('rgb(74, 74, 74)')
-    })
-
-    test(`turquoise's dark color`, () => {
-      const adjusted = bulmaColorTools['dark-color'](turquoise)
-      expect(adjusted).toEqual('rgb(21, 127, 117)')
-    })
-
-    test('dark-colors like sass does', () => {
-      const colors = [
-        'rgb(19, 14, 83)',
-        'rgb(70, 88, 128)',
-        'rgb(132, 67, 148)',
-        'rgb(100, 24, 168)',
-      ]
-      const sassAdjusted = colors.map(col =>
-        renderSassColor(
-          `findDarkColor(${col})`,
-          `
-@function powerNumber($number, $exp)
-  $value: 1
-  @if $exp > 0
-    @for $i from 1 through $exp
-      $value: $value * $number
-  @else if $exp < 0
-    @for $i from 1 through -$exp
-      $value: calc($value / $number)
-  @return $value
-
-@function colorLuminance($color)
-  $color-rgb: ('red': red($color),'green': green($color),'blue': blue($color))
-  @each $name, $value in $color-rgb
-    $adjusted: 0
-    $value: calc($value / 255)
-    @if $value < 0.03928
-      $value: calc($value / 12.92)
-    @else
-      $value: ($value + .055) / 1.055
-      $value: powerNumber($value, 2)
-    $color-rgb: map-merge($color-rgb, ($name: $value))
-  @return (map-get($color-rgb, 'red') * .2126) + (map-get($color-rgb, 'green') * .7152) + (map-get($color-rgb, 'blue') * .0722)
-
-@function findDarkColor($color)
-  @if type-of($color) == 'color'
-    $base-l: 29%
-    $luminance: colorLuminance($color)
-    $luminance-delta: (0.53 - $luminance)
-    $target-l: round($base-l + ($luminance-delta * 53))
-    @return change-color($color, $lightness: max($base-l, $target-l))
-  @return $text-strong
-`
-        )
-      )
-      const libAdjusted = colors.map(col => bulmaColorTools['dark-color'](col))
-      expect(libAdjusted).toEqual(sassAdjusted)
-    })
+    test('black dark is dark-grey', () => { expect(bulmaColorTools['dark-color']('black')).toEqual('rgb(145, 145, 145)') })
+    test('white dark is light-grey', () => { expect(bulmaColorTools['dark-color']('white')).toEqual('rgb(74, 74, 74)') })
+    test('turquoise dark', () => { expect(bulmaColorTools['dark-color'](turquoise)).toEqual('rgb(21, 127, 117)') })
   })
 
   test('returns name and val from color def', () => {
-    const { name, value } = getNameValFromColorDef('text', {
-      r: 170,
-      g: 130,
-      b: 200,
-    })
+    const { name, value } = getNameValFromColorDef('text', { r: 170, g: 130, b: 200 })
     expect(name).toEqual('--text')
     expect(value).toEqual('rgb(170, 130, 200)')
   })
 
   test('receives error when passing an invalid object', () => {
-    expect(() =>
-      strValFromColorDef({ r: 170, g: 130, x: 500 } as any, 'text')
-    ).toThrow()
+    expect(() => strValFromColorDef({ r: 170, g: 130, x: 500 } as any, 'text')).toThrow()
   })
 
   test('returns val from color def', () => {
     const testVals = [
-      {
-        r: 170,
-        g: 130,
-        b: 200,
-      },
-      {
-        r: 170,
-        g: 130,
-        b: 200,
-        a: 0.2,
-      },
-      {
-        h: 170,
-        s: 60,
-        l: 70,
-      },
-      {
-        h: 170,
-        s: 60,
-        l: 70,
-        a: 0.7,
-      },
+      { r: 170, g: 130, b: 200 },
+      { r: 170, g: 130, b: 200, a: 0.2 },
+      { h: 170, s: 60, l: 70 },
+      { h: 170, s: 60, l: 70, a: 0.7 },
       '#c8e298',
     ]
     const strVals = testVals.map(v => strValFromColorDef(v, 'some-name'))

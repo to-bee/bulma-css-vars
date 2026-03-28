@@ -115,7 +115,7 @@ export async function runCli(cwd: string) {
   const colorDefs = options.colorDefs
   const colorCallSetFromColorDef: ColorCallSet = Object.assign(
     {} as ColorCallSet,
-    ...Object.entries(colorDefs).map(([colorName, _colorCallDef]) => {
+    ...Object.entries(colorDefs).map(([colorName, _colorCallDef]): { [key: string]: { calls: never[] } } => {
       return {
         [colorName]: {
           calls: [],
